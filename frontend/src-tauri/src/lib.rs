@@ -401,6 +401,31 @@ pub fn run() {
                 cwd
             );
 
+            // Meeting-detector hook: a `meetily://start-recording` launch (e.g. the
+            // action button of a "meeting detected" toast) starts a recording through
+            // the same path as the tray's Start entry, but only when idle. Any other
+            // second-instance launch just focuses the window as before.
+            if args.iter().any(|a| a.starts_with("meetily://start-recording")) {
+                let app_clone = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    if !is_recording().await {
+                        tray::set_tray_state(&app_clone, tray::RecordingState::Starting);
+                        if let Some(window) = app_clone.get_webview_window("main") {
+                            let _ = window.eval("sessionStorage.setItem('autoStartRecording', 'true')");
+                            let _ = window.eval("window.location.assign('/')");
+                        }
+                    } else {
+                        log_info!("start-recording deep link ignored: already recording");
+                    }
+                });
+            }
+
+            // `meetily://toggle-recording` behaves exactly like the tray toggle
+            // (starts when idle, stops and saves when recording).
+            if args.iter().any(|a| a.starts_with("meetily://toggle-recording")) {
+                tray::toggle_recording_handler(app);
+            }
+
             tray::focus_main_window(app);
         }));
     }
