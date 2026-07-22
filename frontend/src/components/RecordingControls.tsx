@@ -26,6 +26,8 @@ interface RecordingControlsProps {
     systemDevice: string | null;
   };
   meetingName?: string;
+  /** Soul IA / CRM: recording is blocked without a logged-in session. */
+  crmAuthenticated?: boolean;
 }
 
 export const RecordingControls: React.FC<RecordingControlsProps> = ({
@@ -40,6 +42,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
   isParentProcessing,
   selectedDevices,
   meetingName,
+  crmAuthenticated = true,
 }) => {
   // Use global recording state context for pause state (syncs with tray operations)
   const recordingState = useRecordingState();
@@ -84,7 +87,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
   }, []);
 
   const handleStartRecording = useCallback(async () => {
-    if (isStarting || isValidatingModel) return;
+    if (isStarting || isValidatingModel || !crmAuthenticated) return;
     console.log('Starting recording...');
     console.log('Selected devices:', selectedDevices);
     console.log('Meeting name:', meetingName);
@@ -135,7 +138,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
         });
       }
     }
-  }, [onRecordingStart, isStarting, isValidatingModel, selectedDevices, meetingName, isRecording]);
+  }, [onRecordingStart, isStarting, isValidatingModel, selectedDevices, meetingName, isRecording, crmAuthenticated]);
 
   const stopRecordingAction = useCallback(async () => {
     console.log('Executing stop recording...');
@@ -393,11 +396,12 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => {
+                            if (!crmAuthenticated) return;
                             Analytics.trackButtonClick('start_recording', 'recording_controls');
                             handleStartRecording();
                           }}
-                          disabled={isStarting || isProcessing || isRecordingDisabled || isValidatingModel}
-                          className={`w-12 h-12 flex items-center justify-center ${isStarting || isProcessing || isValidatingModel ? 'bg-gray-400' : 'bg-red-500 hover:bg-red-600'
+                          disabled={isStarting || isProcessing || isRecordingDisabled || isValidatingModel || !crmAuthenticated}
+                          className={`w-12 h-12 flex items-center justify-center ${!crmAuthenticated || isStarting || isProcessing || isValidatingModel ? 'bg-gray-400' : 'bg-[#F17001] hover:bg-[#d86400]'
                             } rounded-full text-white transition-colors relative`}
                         >
                           {isValidatingModel ? (
@@ -408,7 +412,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Start recording</p>
+                        <p>{crmAuthenticated ? 'Start recording' : 'Inicia sesion para grabar'}</p>
                       </TooltipContent>
                     </Tooltip>
                   ) : (
@@ -475,7 +479,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                     {barHeights.map((height, index) => (
                       <div
                         key={index}
-                        className={`w-1 rounded-full transition-all duration-200 ${isPaused ? 'bg-orange-500' : 'bg-red-500'
+                        className={`w-1 rounded-full transition-all duration-200 ${isPaused ? 'bg-[#01D6E0]' : 'bg-[#F17001]'
                           }`}
                         style={{
                           height: isRecording && !isPaused ? height : '4px',

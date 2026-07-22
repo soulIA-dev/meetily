@@ -25,6 +25,10 @@ import { RecordingPostProcessingProvider } from '@/contexts/RecordingPostProcess
 import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
 import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
+import { CrmSessionProvider, useCrmSession } from '@/contexts/CrmSessionContext'
+import { MeetingNameDialogProvider } from '@/contexts/MeetingNameDialogContext'
+import { CrmUploadQueueProvider } from '@/components/CrmUploadQueueProvider'
+import { CrmLoginModal } from '@/components/CrmLogin/CrmLoginModal'
 
 
 const sourceSans3 = Source_Sans_3({
@@ -59,6 +63,25 @@ function ConditionalImportDialog({
       preselectedFile={importFilePath}
     />
   );
+}
+
+// Shows the Soul IA / CRM login prompt once per app start (after onboarding,
+// when there is no saved session). Dismissible: closing it just leaves
+// recording gated elsewhere until the user logs in from Settings.
+function CrmStartupLoginGate({ showOnboarding }: { showOnboarding: boolean }) {
+  const { isAuthenticated, isLoading } = useCrmSession()
+  const [dismissed, setDismissed] = useState(false)
+
+  const shouldShow = !showOnboarding && !isLoading && !isAuthenticated && !dismissed
+
+  return (
+    <CrmLoginModal
+      open={shouldShow}
+      onOpenChange={(open) => {
+        if (!open) setDismissed(true)
+      }}
+    />
+  )
 }
 
 // export { metadata } from './metadata'
@@ -237,40 +260,50 @@ export default function RootLayout({
           <RecordingStateProvider>
             <TranscriptProvider>
               <ConfigProvider>
-                <OllamaDownloadProvider>
-                  <OnboardingProvider>
-                    <UpdateCheckProvider>
-                      <SidebarProvider>
-                        <TooltipProvider>
-                          <RecordingPostProcessingProvider>
-                            <ImportDialogProvider onOpen={handleOpenImportDialog}>
-                              {/* Download progress toast provider - listens for background downloads */}
-                              <DownloadProgressToastProvider />
+                <CrmSessionProvider>
+                  <OllamaDownloadProvider>
+                    <OnboardingProvider>
+                      <UpdateCheckProvider>
+                        <SidebarProvider>
+                          <TooltipProvider>
+                            <RecordingPostProcessingProvider>
+                              <ImportDialogProvider onOpen={handleOpenImportDialog}>
+                                <MeetingNameDialogProvider>
+                                  {/* Download progress toast provider - listens for background downloads */}
+                                  <DownloadProgressToastProvider />
 
-                              {/* Show onboarding or main app */}
-                              {showOnboarding ? (
-                                <OnboardingFlow onComplete={handleOnboardingComplete} />
-                              ) : (
-                                <div className="flex">
-                                  <Sidebar />
-                                  <MainContent>{children}</MainContent>
-                                </div>
-                              )}
-                              {/* Import audio overlay and dialog */}
-                              <ImportDropOverlay visible={showDropOverlay} />
-                              <ConditionalImportDialog
-                                showImportDialog={showImportDialog}
-                                handleImportDialogClose={handleImportDialogClose}
-                                importFilePath={importFilePath}
-                              />
-                            </ImportDialogProvider>
-                          </RecordingPostProcessingProvider>
-                        </TooltipProvider>
-                      </SidebarProvider>
-                    </UpdateCheckProvider>
-                  </OnboardingProvider>
+                                  {/* CRM upload retry loop (startup + every 10 min) */}
+                                  <CrmUploadQueueProvider />
 
-                </OllamaDownloadProvider>
+                                  {/* Show onboarding or main app */}
+                                  {showOnboarding ? (
+                                    <OnboardingFlow onComplete={handleOnboardingComplete} />
+                                  ) : (
+                                    <div className="flex">
+                                      <Sidebar />
+                                      <MainContent>{children}</MainContent>
+                                    </div>
+                                  )}
+
+                                  {/* Soul IA / CRM login prompt (once per start, after onboarding) */}
+                                  <CrmStartupLoginGate showOnboarding={showOnboarding} />
+
+                                  {/* Import audio overlay and dialog */}
+                                  <ImportDropOverlay visible={showDropOverlay} />
+                                  <ConditionalImportDialog
+                                    showImportDialog={showImportDialog}
+                                    handleImportDialogClose={handleImportDialogClose}
+                                    importFilePath={importFilePath}
+                                  />
+                                </MeetingNameDialogProvider>
+                              </ImportDialogProvider>
+                            </RecordingPostProcessingProvider>
+                          </TooltipProvider>
+                        </SidebarProvider>
+                      </UpdateCheckProvider>
+                    </OnboardingProvider>
+                  </OllamaDownloadProvider>
+                </CrmSessionProvider>
               </ConfigProvider>
             </TranscriptProvider>
           </RecordingStateProvider>

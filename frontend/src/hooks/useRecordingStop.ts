@@ -12,6 +12,9 @@ import {
   applyPinnedSummaryLanguageToMeeting,
   detectAndCacheSummaryLanguage,
 } from '@/lib/summary-language-preferences';
+import { useMeetingNameDialog } from '@/contexts/MeetingNameDialogContext';
+import { useCrmSession } from '@/contexts/CrmSessionContext';
+import { triggerCrmMeetingUpload } from '@/lib/crmMeetingUpload';
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
 
@@ -68,6 +71,11 @@ export function useRecordingStop(
   } = useSidebar();
 
   const router = useRouter();
+
+  // Soul IA / CRM: prompt for the meeting name at stop time, and know
+  // whether we have a session to upload the finished meeting to.
+  const { promptMeetingName } = useMeetingNameDialog();
+  const { baseUrl: crmBaseUrl, token: crmToken } = useCrmSession();
 
   // Guard to prevent duplicate/concurrent stop calls (e.g., from UI and tray simultaneously)
   const stopInProgressRef = useRef(false);
@@ -235,18 +243,29 @@ export function useRecordingStop(
       // This ensures user sees all transcripts streaming in before database save
       if (isCallApi && transcriptionComplete == true) {
 
-        setStatus(RecordingStatus.SAVING, 'Saving meeting to database...');
-
         // Get fresh transcript state (ALL transcripts including late ones)
         const freshTranscripts = [...transcriptsRef.current];
 
         // Get folder_path and meeting_name from recording-stopped event
         const folderPath = sessionStorage.getItem('last_recording_folder_path');
         const savedMeetingName = sessionStorage.getItem('last_recording_meeting_name');
+        const defaultMeetingTitle = savedMeetingName || meetingTitle || 'New Meeting';
+
+        // Soul IA / CRM: ask the user to confirm/edit the meeting name before
+        // saving. This is also the title the CRM archives it under.
+        setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, 'Waiting for meeting name...');
+        let finalMeetingTitle = defaultMeetingTitle;
+        try {
+          finalMeetingTitle = await promptMeetingName(defaultMeetingTitle);
+        } catch (error) {
+          console.warn('Meeting name prompt failed, falling back to default title:', error);
+        }
+
+        setStatus(RecordingStatus.SAVING, 'Saving meeting to database...');
 
         console.log('💾 Saving COMPLETE transcripts to database...', {
           transcript_count: freshTranscripts.length,
-          meeting_name: savedMeetingName || meetingTitle,
+          meeting_name: finalMeetingTitle,
           folder_path: folderPath,
           sample_text: freshTranscripts.length > 0 ? freshTranscripts[0].text.substring(0, 50) + '...' : 'none',
           last_transcript: freshTranscripts.length > 0 ? freshTranscripts[freshTranscripts.length - 1].text.substring(0, 30) + '...' : 'none',
@@ -254,7 +273,7 @@ export function useRecordingStop(
 
         try {
           const responseData = await storageService.saveMeeting(
-            savedMeetingName || meetingTitle || 'New Meeting',  // PREFER savedMeetingName (backend source)
+            finalMeetingTitle,
             freshTranscripts,
             folderPath
           );
@@ -293,6 +312,20 @@ export function useRecordingStop(
           console.log('   Transcripts:', freshTranscripts.length);
           console.log('   folder_path:', folderPath);
 
+          // Soul IA / CRM: fire-and-forget upload of title + transcript (and,
+          // once ffmpeg finishes, the compressed dual-track audio). Failures
+          // stay queued for the retry loop; never blocks navigation below.
+          triggerCrmMeetingUpload({
+            meetingId,
+            title: finalMeetingTitle,
+            transcripts: freshTranscripts,
+            folderPath,
+            baseUrl: crmBaseUrl,
+            token: crmToken,
+          }).catch((error) => {
+            console.error('[CRM] Failed to trigger meeting upload:', meetingId, error);
+          });
+
           // Mark meeting as saved in IndexedDB (for recovery system)
           await markMeetingAsSaved();
 
@@ -316,7 +349,7 @@ export function useRecordingStop(
             }
           } catch (error) {
             console.warn('Could not fetch meeting details, using ID only:', error);
-            setCurrentMeeting({ id: meetingId, title: savedMeetingName || meetingTitle || 'New Meeting' });
+            setCurrentMeeting({ id: meetingId, title: finalMeetingTitle });
           }
 
           // Mark as completed
@@ -434,6 +467,9 @@ export function useRecordingStop(
     setMeetings,
     meetings,
     setIsMeetingActive,
+    promptMeetingName,
+    crmBaseUrl,
+    crmToken,
     router,
   ]);
 

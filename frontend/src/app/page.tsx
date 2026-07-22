@@ -8,6 +8,7 @@ import { usePermissionCheck } from '@/hooks/usePermissionCheck';
 import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateContext';
 import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useConfig } from '@/contexts/ConfigContext';
+import { useCrmSession } from '@/contexts/CrmSessionContext';
 import { StatusOverlays } from '@/app/_components/StatusOverlays';
 import Analytics from '@/lib/analytics';
 import { SettingsModals } from './_components/SettingsModal';
@@ -31,6 +32,7 @@ export default function Home() {
   // Use contexts for state management
   const { meetingTitle } = useTranscripts();
   const { transcriptModelConfig, selectedDevices } = useConfig();
+  const { isAuthenticated: crmAuthenticated } = useCrmSession();
   const recordingState = useRecordingState();
 
   // Extract status from global state
@@ -246,6 +248,7 @@ export default function Home() {
                       isParentProcessing={isProcessingStop}
                       selectedDevices={selectedDevices}
                       meetingName={meetingTitle}
+                      crmAuthenticated={crmAuthenticated}
                     />
                   </div>
                 </div>

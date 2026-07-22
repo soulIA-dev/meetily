@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useConfig } from '@/contexts/ConfigContext';
+import { useCrmSession } from '@/contexts/CrmSessionContext';
 
 import {
   Dialog,
@@ -61,6 +62,7 @@ const Sidebar: React.FC = () => {
   const { isRecording } = useRecordingState();
   const { openImportDialog } = useImportDialog();
   const { betaFeatures } = useConfig();
+  const { isAuthenticated: crmAuthenticated } = useCrmSession();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
@@ -474,9 +476,12 @@ const Sidebar: React.FC = () => {
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                onClick={handleRecordingToggle}
-                disabled={isRecording}
-                className={`p-2 ${isRecording ? 'bg-red-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-full transition-colors duration-150 shadow-sm`}
+                onClick={() => {
+                  if (!crmAuthenticated) return;
+                  handleRecordingToggle();
+                }}
+                disabled={isRecording || !crmAuthenticated}
+                className={`p-2 ${isRecording || !crmAuthenticated ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F17001] hover:bg-[#d86400]'} rounded-full transition-colors duration-150 shadow-sm`}
               >
                 {isRecording ? (
                   <Square className="w-5 h-5 text-white" />
@@ -486,7 +491,7 @@ const Sidebar: React.FC = () => {
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              <p>{isRecording ? "Recording in progress..." : "Start Recording"}</p>
+              <p>{isRecording ? "Recording in progress..." : !crmAuthenticated ? "Inicia sesion para grabar" : "Start Recording"}</p>
             </TooltipContent>
           </Tooltip>
 
@@ -680,7 +685,7 @@ const Sidebar: React.FC = () => {
           }`}
       >
         {/*  Header with traffic light spacing */}
-        <div className="flex-shrink-0 h-22 flex items-center">
+        <div className="flex-shrink-0 h-22 flex items-center border-b-2 border-[#F17001]/20">
 
           {/* Title container */}
 
@@ -774,23 +779,35 @@ const Sidebar: React.FC = () => {
         {!isCollapsed && (
 
           <div className="flex-shrink-0 p-2 border-t border-gray-100">
-            <button
-              onClick={handleRecordingToggle}
-              disabled={isRecording}
-              className={`w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-white ${isRecording ? 'bg-red-300 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-lg transition-colors shadow-sm`}
-            >
-              {isRecording ? (
-                <>
-                  <Square className="w-4 h-4 mr-2" />
-                  <span>Recording in progress...</span>
-                </>
-              ) : (
-                <>
-                  <Mic className="w-4 h-4 mr-2" />
-                  <span>Start Recording</span>
-                </>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    if (!crmAuthenticated) return;
+                    handleRecordingToggle();
+                  }}
+                  disabled={isRecording || !crmAuthenticated}
+                  className={`w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-white ${isRecording || !crmAuthenticated ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#F17001] hover:bg-[#d86400]'} rounded-lg transition-colors shadow-sm`}
+                >
+                  {isRecording ? (
+                    <>
+                      <Square className="w-4 h-4 mr-2" />
+                      <span>Recording in progress...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-4 h-4 mr-2" />
+                      <span>Start Recording</span>
+                    </>
+                  )}
+                </button>
+              </TooltipTrigger>
+              {!crmAuthenticated && !isRecording && (
+                <TooltipContent side="right">
+                  <p>Inicia sesion para grabar</p>
+                </TooltipContent>
               )}
-            </button>
+            </Tooltip>
 
             {betaFeatures.importAndRetranscribe && (
               <button
