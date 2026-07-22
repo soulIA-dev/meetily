@@ -76,6 +76,18 @@ impl RecordingManager {
         // Pass auto_save to control whether audio checkpoints are created
         let recording_sender = self.recording_saver.start_accumulation(auto_save);
 
+        // Dual-track sidecar (L=mic, R=system): only when audio is being saved
+        // and the meeting folder exists. Failure to create it never blocks the
+        // recording; it just logs and continues without the sidecar.
+        let dual_track_sender = if auto_save {
+            self.recording_saver
+                .get_meeting_folder()
+                .cloned()
+                .and_then(|folder| super::dual_track::spawn_dual_track_writer(folder, 48000))
+        } else {
+            None
+        };
+
         // Start recording state first
         self.state.start_recording()?;
 
@@ -112,6 +124,7 @@ impl RecordingManager {
             0, // Ignored - using dynamic sizing internally
             48000, // 48kHz sample rate
             Some(recording_sender), // CRITICAL: Pass recording sender to receive pre-mixed audio
+            dual_track_sender, // Dual-track sidecar sender (None when auto_save is off)
             mic_name,
             mic_kind,
             sys_name,

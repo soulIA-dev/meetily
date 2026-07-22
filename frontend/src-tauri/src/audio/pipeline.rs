@@ -694,6 +694,8 @@ pub struct AudioPipeline {
     mixer: ProfessionalAudioMixer,
     // Recording sender for pre-mixed audio
     recording_sender_for_mixed: Option<mpsc::UnboundedSender<AudioChunk>>,
+    // Dual-track sidecar: synchronized (mic, system) windows before mixing
+    dual_track_sender: Option<mpsc::UnboundedSender<(Vec<f32>, Vec<f32>)>>,
 }
 
 impl AudioPipeline {
@@ -760,6 +762,7 @@ impl AudioPipeline {
             ring_buffer,
             mixer,
             recording_sender_for_mixed: None,  // Will be set by manager
+            dual_track_sender: None,  // Will be set by manager
         }
     }
 
@@ -822,6 +825,13 @@ impl AudioPipeline {
                     // STEP 2: Mix audio in fixed windows when both streams have sufficient data
                     while self.ring_buffer.can_mix() {
                         if let Some((mic_window, sys_window)) = self.ring_buffer.extract_window() {
+                            // Dual-track sidecar: persist the synchronized windows BEFORE mixing
+                            // (L=mic, R=system). This is the only point where source attribution
+                            // still exists; the writer thread owns all file I/O.
+                            if let Some(ref dual) = self.dual_track_sender {
+                                let _ = dual.send((mic_window.clone(), sys_window.clone()));
+                            }
+
                             // Simple mixing without aggressive ducking
                             let mixed_clean = self.mixer.mix_window(&mic_window, &sys_window);
 
@@ -962,6 +972,7 @@ impl AudioPipelineManager {
         target_chunk_duration_ms: u32,
         sample_rate: u32,
         recording_sender: Option<mpsc::UnboundedSender<AudioChunk>>,
+        dual_track_sender: Option<mpsc::UnboundedSender<(Vec<f32>, Vec<f32>)>>,
         mic_device_name: String,
         mic_device_kind: super::device_detection::InputDeviceKind,
         system_device_name: String,
@@ -994,6 +1005,7 @@ impl AudioPipelineManager {
         // CRITICAL FIX: Connect recording sender to receive pre-mixed audio
         // This ensures both mic AND system audio are captured in recordings
         pipeline.recording_sender_for_mixed = recording_sender;
+        pipeline.dual_track_sender = dual_track_sender;
 
         let handle = tokio::spawn(async move {
             pipeline.run().await
