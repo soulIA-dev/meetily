@@ -266,9 +266,11 @@ export default function RootLayout({
                       <UpdateCheckProvider>
                         <SidebarProvider>
                           <TooltipProvider>
-                            <RecordingPostProcessingProvider>
-                              <ImportDialogProvider onOpen={handleOpenImportDialog}>
-                                <MeetingNameDialogProvider>
+                            {/* MeetingNameDialogProvider debe envolver a RecordingPostProcessingProvider,
+                                que consume useRecordingStop -> useMeetingNameDialog */}
+                            <MeetingNameDialogProvider>
+                              <RecordingPostProcessingProvider>
+                                <ImportDialogProvider onOpen={handleOpenImportDialog}>
                                   {/* Download progress toast provider - listens for background downloads */}
                                   <DownloadProgressToastProvider />
 
@@ -295,9 +297,9 @@ export default function RootLayout({
                                     handleImportDialogClose={handleImportDialogClose}
                                     importFilePath={importFilePath}
                                   />
-                                </MeetingNameDialogProvider>
-                              </ImportDialogProvider>
-                            </RecordingPostProcessingProvider>
+                                </ImportDialogProvider>
+                              </RecordingPostProcessingProvider>
+                            </MeetingNameDialogProvider>
                           </TooltipProvider>
                         </SidebarProvider>
                       </UpdateCheckProvider>
