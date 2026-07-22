@@ -436,6 +436,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // Needed by the frontend's @tauri-apps/plugin-fs (e.g. CRM audio upload
+        // reading the compressed .m4a bytes off disk).
+        .plugin(tauri_plugin_fs::init())
         .manage(whisper_engine::parallel_commands::ParallelProcessorState::new())
         .manage(Arc::new(RwLock::new(
             None::<notifications::manager::NotificationManager<tauri::Wry>>,
@@ -773,6 +776,8 @@ pub fn run() {
             audio::import::start_import_audio_command,
             audio::import::cancel_import_command,
             audio::import::is_import_in_progress_command,
+            // CRM export commands (Soul IA team recorder)
+            audio::crm_export::crm_compress_meeting_audio,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -25,6 +25,7 @@ pub mod recording_preferences;
 pub mod recording_saver;
 pub mod incremental_saver;  // NEW: Incremental audio saving with checkpoints
 pub mod dual_track;  // NEW: Stereo sidecar (L=mic, R=system) for speaker attribution
+pub mod crm_export;  // NEW: Compress dual-track sidecar to .m4a for CRM upload
 pub mod level_monitor;
 pub mod simple_level_monitor;
 pub mod buffer_pool;
